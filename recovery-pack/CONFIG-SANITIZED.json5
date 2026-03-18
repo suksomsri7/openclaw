@@ -1,0 +1,104 @@
+{
+  plugins: {
+    allow: [
+      'whatsapp',
+      'discord',
+      'telegram',
+      'slack',
+      'nostr',
+      'googlechat',
+    ],
+    entries: {
+      whatsapp: { enabled: true },
+      discord: { enabled: true },
+      imessage: { enabled: false },
+      telegram: { enabled: true },
+      slack: { enabled: true },
+      nostr: { enabled: true },
+      signal: { enabled: false },
+      googlechat: { enabled: true },
+    },
+  },
+  update: {
+    channel: 'stable',
+    checkOnStart: false,
+  },
+  browser: {
+    headless: true,
+    noSandbox: true,
+    defaultProfile: 'openclaw',
+  },
+  commands: {
+    bash: true,
+    native: 'auto',
+    nativeSkills: 'auto',
+    restart: true,
+  },
+  agents: {
+    list: [
+      { id: 'main', name: 'main' },
+      {
+        id: 'shark',
+        name: 'Shark',
+        workspace: '/data/.openclaw/workspace/agents/shark',
+        identity: { name: 'Shark', theme: 'senior content strategist and growth analyst', emoji: '🦈' },
+      },
+      {
+        id: 'octopus',
+        name: 'Octopus',
+        workspace: '/data/.openclaw/workspace/agents/octopus',
+        identity: { name: 'Octopus', theme: 'master dive creator', emoji: '🐙' },
+      },
+      {
+        id: 'seaturtle',
+        name: 'SeaTurtle',
+        workspace: '/data/.openclaw/workspace/agents/seaturtle',
+        identity: { name: 'SeaTurtle', theme: 'dive theory and safety professor', emoji: '🐢' },
+      },
+      {
+        id: 'whale',
+        name: 'Whale',
+        workspace: '/data/.openclaw/workspace/agents/whale',
+        identity: { name: 'Whale', theme: 'ocean explorer and marine life researcher', emoji: '🐋' },
+      },
+      {
+        id: 'manta',
+        name: 'Manta',
+        workspace: '/data/.openclaw/workspace/agents/manta',
+        identity: { name: 'Manta', theme: 'business value and conversion intelligence manager', emoji: '🌊' },
+      },
+    ],
+    defaults: {
+      model: { primary: 'ChatGPT 5.4' },
+      models: {
+        'openai/gpt-5.4': { alias: 'ChatGPT 5.4' },
+        'openai/gpt-5.4-pro': { alias: 'ChatGPT 5.4 Pro' },
+        'openai/gpt-5.2': { alias: 'ChatGPT 5.2' },
+        'openai/gpt-5.1-codex': { alias: 'ChatGPT 5.1 Codex' },
+        'openai/gpt-4.1': { alias: 'ChatGPT 4.1' },
+      },
+    },
+  },
+  gateway: {
+    mode: 'local',
+    controlUi: {},
+    auth: {
+      mode: 'token',
+      token: '__RESTORE_FROM_SECURE_BACKUP__',
+      rateLimit: {
+        maxAttempts: 10,
+        windowMs: 60000,
+        lockoutMs: 300000,
+      },
+    },
+    remote: {
+      token: '__RESTORE_FROM_SECURE_BACKUP__',
+    },
+  },
+  models: {
+    mode: 'merge',
+  },
+  hooks: {
+    token: '__RESTORE_FROM_SECURE_BACKUP__',
+  },
+}
