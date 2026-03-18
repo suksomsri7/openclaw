@@ -12,3 +12,4 @@
   - Whale = destinations, marine life, conservation, seasonality, and ocean storytelling source-based research.
   - Manta = business value, offer positioning, objection handling, and conversion source-based research.
 - Final approved workflow backbone: Boss → Kraken → Shark → SeaTurtle/Whale/Manta → Shark → Octopus → Shark → Kraken → Boss.
+- Approved scaling policy: Shark, SeaTurtle, Whale, Manta, and Octopus may spawn sub-agents for individual cards. Guardrails: 1 sub-agent = 1 card, sub-agents report only to their lead agent, lead agents review before forwarding, and Kraken sees lead-level status plus blockers/approvals only.
