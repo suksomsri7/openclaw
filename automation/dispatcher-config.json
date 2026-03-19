@@ -13,5 +13,13 @@
   "commentFlags": [
     "[AUTO-RUN:ON]"
   ],
-  "requireWhitelist": true
+  "requireWhitelist": true,
+  "agentApiKeys": {
+    "kraken": "kbn_2a648bc0210e3872ffc8f672bd6951dad1451e0c250c817b93cc7578733cd7a4",
+    "shark": "kbn_fe77557f11c3ed81ce604e074646aac074b11826b97195507604c036ed32e0da",
+    "octopus": "kbn_3908b9f266d379525c95d1d4f2cb7a071c8db0fdfdc9a125951d5a97d34b86a5",
+    "seaturtle": "kbn_6d4de9b9ae353f78e490c15d8929f9e0b1fcb96a14dee4620d24818ed53f6d53",
+    "whale": "kbn_ba2cdc9fa8753ed00a8dca2d2e945a88766787a2faa328cbcf1a3e23a228a846",
+    "manta": "kbn_0f2cfa7ab189c58fb262749f05d33a1c56fcd511c8100d9668632a39f173511a"
+  }
 }

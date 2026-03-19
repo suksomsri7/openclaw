@@ -48,12 +48,14 @@ function appendRunLog(record) {
 }
 
 async function api(p, options = {}) {
+  const apiKey = options.apiKey || API_KEY;
+  const { apiKey: _ignored, ...rest } = options;
   const res = await fetch(`${BASE_URL}${p}`, {
-    ...options,
+    ...rest,
     headers: {
-      'x-api-key': API_KEY,
+      'x-api-key': apiKey,
       'Content-Type': 'application/json',
-      ...(options.headers || {})
+      ...(rest.headers || {})
     }
   });
   const json = await res.json();
@@ -295,30 +297,34 @@ function stageToColumnTitle(stage) {
   return null;
 }
 
-async function postComment(cardId, content) {
+async function postComment(cardId, content, apiKey = API_KEY) {
   return api(`/cards/${cardId}/comments`, {
     method: 'POST',
+    apiKey,
     body: JSON.stringify({ content })
   });
 }
 
-async function moveCard(cardId, columnId) {
+async function moveCard(cardId, columnId, apiKey = API_KEY) {
   return api(`/cards/${cardId}/move`, {
     method: 'POST',
+    apiKey,
     body: JSON.stringify({ columnId, position: 'top' })
   });
 }
 
-async function updateSubtask(cardId, subtaskId, patch) {
+async function updateSubtask(cardId, subtaskId, patch, apiKey = API_KEY) {
   return api(`/cards/${cardId}/subtasks/${subtaskId}`, {
     method: 'PATCH',
+    apiKey,
     body: JSON.stringify(patch)
   });
 }
 
-async function createSubtask(cardId, title) {
+async function createSubtask(cardId, title, apiKey = API_KEY) {
   return api(`/cards/${cardId}/subtasks`, {
     method: 'POST',
+    apiKey,
     body: JSON.stringify({ title })
   });
 }
@@ -409,6 +415,7 @@ async function maybeAdvanceResearchToSynthesis(card, board) {
   const state = loadState();
   const config = loadConfig();
   const board = await api(`/boards/${BOARD_ID}`);
+  const agentApiKeys = config.agentApiKeys || {};
   let dispatched = 0;
 
   for (const column of board.columns || []) {
@@ -458,12 +465,14 @@ async function maybeAdvanceResearchToSynthesis(card, board) {
             parsed.comment ? `COMMENT:\n${parsed.comment}` : '',
             parsed.returnTo ? `RETURN_TO: ${parsed.returnTo}` : ''
           ].filter(Boolean).join('\n\n');
-          await postComment(detail.id, autoComment);
+          const actorApiKey = agentApiKeys[agentId] || API_KEY;
+          const krakenApiKey = agentApiKeys.kraken || API_KEY;
+          await postComment(detail.id, autoComment, actorApiKey);
           const refreshedForCompletion = await api(`/cards/${detail.id}`);
           await markAgentSubtasksComplete(refreshedForCompletion, agentId);
 
           if (normalizedNextStage && normalizedNextStage !== stage) {
-            await postComment(detail.id, `[Stage: ${normalizedNextStage}]\n\n[AUTOMATION] Transitioned from ${stage} to ${normalizedNextStage}`);
+            await postComment(detail.id, `[Stage: ${normalizedNextStage}]\n\n[AUTOMATION] Transitioned from ${stage} to ${normalizedNextStage}`, krakenApiKey);
             const refreshedForStage = await api(`/cards/${detail.id}`);
             await ensureStageSubtasks(refreshedForStage, normalizedNextStage);
           }
@@ -472,7 +481,7 @@ async function maybeAdvanceResearchToSynthesis(card, board) {
           if (targetColumnTitle) {
             const targetColumn = (board.columns || []).find(c => c.title === targetColumnTitle);
             if (targetColumn && targetColumn.id !== detail.columnId) {
-              await moveCard(detail.id, targetColumn.id);
+              await moveCard(detail.id, targetColumn.id, krakenApiKey);
             }
           }
         }
