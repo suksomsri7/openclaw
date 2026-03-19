@@ -31,6 +31,7 @@ node automation/kanban-dispatcher.mjs --dry-run --verbose
 
 ## Notes
 
-- Current version dispatches work to configured agents but does **not yet** write their results back into Kanban automatically.
-- Next version should parse agent output and post comments / update stage / refresh subtasks.
+- Current version dispatches work to configured agents, parses their structured replies, and posts autorun comments back into Kanban.
+- Column movement is supported based on `NEXT_STAGE` mapping.
+- Subtask refresh/closure is **not yet** automatic.
 - State file: `automation/state/dispatcher-state.json`

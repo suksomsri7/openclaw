@@ -43,7 +43,7 @@ async function api(p, options = {}) {
 function mapStageToAgent(stage, card) {
   if (stage === 'Strategy' || stage === 'Synthesis' || stage === 'Review') return ['shark'];
   if (stage === 'Drafting') return ['octopus'];
-  if (stage === 'Approval') return ['main'];
+  if (stage === 'Approval') return []; // Boss/Kraken decision gate remains manual for now
   if (stage === 'Research') {
     const targets = new Set();
     for (const s of card.subtasks || []) {
@@ -55,6 +55,16 @@ function mapStageToAgent(stage, card) {
     return [...targets];
   }
   return [];
+}
+
+function simpleHash(input) {
+  let hash = 0;
+  const s = String(input || '');
+  for (let i = 0; i < s.length; i++) {
+    hash = ((hash << 5) - hash) + s.charCodeAt(i);
+    hash |= 0;
+  }
+  return String(hash);
 }
 
 function sortedComments(card) {
@@ -83,6 +93,16 @@ function detectStage(card) {
 function latestHandoff(card) {
   const comments = sortedComments(card).map(c => c.content || '').reverse();
   return comments.find(c => /ส่งต่อ|มอบหมาย|Handoff/i.test(c)) || '';
+}
+
+function isDispatchable(card, stage) {
+  const desc = (card.description || '').trim();
+  const handoff = latestHandoff(card);
+  if (!desc) return false;
+  if (['Strategy', 'Research', 'Synthesis', 'Drafting'].includes(stage) && !handoff && !(card.comments || []).some(c => /\[Stage:/i.test(c.content || ''))) {
+    return false;
+  }
+  return true;
 }
 
 function buildPrompt(card, stage, targetAgent) {
@@ -136,6 +156,50 @@ function dispatchAgent(agentId, prompt) {
   return JSON.parse(out);
 }
 
+function extractText(result) {
+  if (!result || !result.result || !result.result.payloads || !result.result.payloads[0]) return '';
+  return result.result.payloads[0].text || '';
+}
+
+function parseAgentResponse(text) {
+  const getBlock = (label, nextLabels = []) => {
+    const labels = [label, ...nextLabels].map(l => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const re = new RegExp(`${labels[0]}:\\s*([\\s\\S]*?)(?=\\n(?:${labels.slice(1).join('|')}):|$)`, 'i');
+    const m = text.match(re);
+    return m ? m[1].trim() : '';
+  };
+  return {
+    status: getBlock('STATUS', ['SUMMARY', 'DELIVERABLE', 'NEXT_STAGE', 'COMMENT', 'RETURN_TO', 'BLOCKERS', 'NOTES']) || 'done',
+    summary: getBlock('SUMMARY', ['DELIVERABLE', 'NEXT_STAGE', 'COMMENT', 'RETURN_TO', 'BLOCKERS', 'NOTES']),
+    deliverable: getBlock('DELIVERABLE', ['NEXT_STAGE', 'COMMENT', 'RETURN_TO', 'BLOCKERS', 'NOTES']),
+    nextStage: getBlock('NEXT_STAGE', ['COMMENT', 'RETURN_TO', 'BLOCKERS', 'NOTES']),
+    comment: getBlock('COMMENT', ['RETURN_TO', 'BLOCKERS', 'NOTES']),
+    returnTo: getBlock('RETURN_TO', ['BLOCKERS', 'NOTES'])
+  };
+}
+
+function stageToColumnTitle(stage) {
+  if (['Strategy'].includes(stage)) return 'Brief';
+  if (['Research', 'Synthesis', 'Drafting'].includes(stage)) return 'Creating';
+  if (['Review', 'Approval'].includes(stage)) return 'Review';
+  if (stage === 'Done') return 'Published';
+  return null;
+}
+
+async function postComment(cardId, content) {
+  return api(`/cards/${cardId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ content })
+  });
+}
+
+async function moveCard(cardId, columnId) {
+  return api(`/cards/${cardId}/move`, {
+    method: 'POST',
+    body: JSON.stringify({ columnId, position: 'top' })
+  });
+}
+
 (async function main() {
   const state = loadState();
   const board = await api(`/boards/${BOARD_ID}`);
@@ -146,21 +210,47 @@ function dispatchAgent(agentId, prompt) {
       const detail = await api(`/cards/${card.id}`);
       const stage = detectStage(detail);
       if (!stage || stage === 'Done' || stage === 'Blocked') continue;
+      if (!isDispatchable(detail, stage)) continue;
       const targets = mapStageToAgent(stage, detail);
       if (targets.length === 0) continue;
 
-      const fingerprint = `${detail.id}:${stage}:${(detail.comments || []).length}:${(detail.subtasks || []).length}`;
+      const handoff = latestHandoff(detail);
+      const relevantTitles = (detail.subtasks || []).map(s => s.title || '').join('|');
+      const fingerprint = `${detail.id}:${stage}:${simpleHash(handoff)}:${simpleHash(relevantTitles)}`;
       for (const agentId of targets) {
         const key = `${detail.id}:${agentId}`;
         if (state.dispatches[key] === fingerprint) continue;
 
         const prompt = buildPrompt(detail, stage, agentId);
         const result = dispatchAgent(agentId, prompt);
+        const text = extractText(result);
+        const parsed = parseAgentResponse(text);
         state.dispatches[key] = fingerprint;
         dispatched += 1;
 
+        if (!DRY_RUN && text) {
+          const autoComment = [
+            `[AUTORUN:${agentId}]`,
+            `STATUS: ${parsed.status || 'done'}`,
+            parsed.summary ? `SUMMARY: ${parsed.summary}` : '',
+            parsed.deliverable ? `DELIVERABLE:\n${parsed.deliverable}` : '',
+            parsed.nextStage ? `NEXT_STAGE: ${parsed.nextStage}` : '',
+            parsed.comment ? `COMMENT:\n${parsed.comment}` : '',
+            parsed.returnTo ? `RETURN_TO: ${parsed.returnTo}` : ''
+          ].filter(Boolean).join('\n\n');
+          await postComment(detail.id, autoComment);
+
+          const targetColumnTitle = stageToColumnTitle(parsed.nextStage);
+          if (targetColumnTitle) {
+            const targetColumn = (board.columns || []).find(c => c.title === targetColumnTitle);
+            if (targetColumn && targetColumn.id !== detail.columnId) {
+              await moveCard(detail.id, targetColumn.id);
+            }
+          }
+        }
+
         if (VERBOSE) {
-          console.log(JSON.stringify({ cardId: detail.id, stage, agentId, result }, null, 2));
+          console.log(JSON.stringify({ cardId: detail.id, stage, agentId, parsed, result }, null, 2));
         } else {
           console.log(`[dispatch] ${detail.title} -> ${agentId} (${stage})`);
         }
