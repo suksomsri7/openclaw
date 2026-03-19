@@ -141,6 +141,39 @@ function isDispatchable(card, stage, config) {
   return true;
 }
 
+function collectRelevantPackets(card, stage, targetAgent) {
+  const comments = sortedComments(card);
+  let packetAgents = [];
+  let sinceStage = null;
+
+  if (targetAgent === 'shark' && stage === 'Synthesis') {
+    packetAgents = ['whale', 'manta', 'seaturtle'];
+    sinceStage = latestStageComment(card, 'Research');
+  } else if (targetAgent === 'shark' && stage === 'Review') {
+    packetAgents = ['octopus'];
+    sinceStage = latestStageComment(card, 'Drafting');
+  } else if (targetAgent === 'octopus' && stage === 'Drafting') {
+    packetAgents = ['shark'];
+    sinceStage = latestStageComment(card, 'Synthesis') || latestStageComment(card, 'Strategy');
+  }
+
+  const sinceTime = new Date(sinceStage?.createdAt || 0).getTime();
+  const packets = comments
+    .filter(c => new Date(c.createdAt || 0).getTime() >= sinceTime)
+    .filter(c => {
+      const m = (c.content || '').match(/^\[AUTORUN:([^\]]+)\]/i);
+      return m && packetAgents.includes(m[1].toLowerCase());
+    })
+    .map(c => {
+      const m = (c.content || '').match(/^\[AUTORUN:([^\]]+)\]/i);
+      const agent = m ? m[1].toLowerCase() : 'unknown';
+      const content = (c.content || '').slice(0, 6000);
+      return `### PACKET FROM ${agent.toUpperCase()}\n${content}`;
+    });
+
+  return packets.join('\n\n');
+}
+
 function buildPrompt(card, stage, targetAgent) {
   const relevantSubtasks = (card.subtasks || [])
     .filter(s => {
@@ -154,6 +187,7 @@ function buildPrompt(card, stage, targetAgent) {
     })
     .map(s => `- ${s.title}`)
     .join('\n');
+  const packetBundle = collectRelevantPackets(card, stage, targetAgent);
 
   return [
     `You are receiving a Kanban dispatch.`,
@@ -171,6 +205,9 @@ function buildPrompt(card, stage, targetAgent) {
     '',
     'Latest Handoff Comment:',
     latestHandoff(card) || '(none)',
+    '',
+    'Relevant Prior Agent Packets:',
+    packetBundle || '(none)',
     '',
     'Reply in this exact structure:',
     'STATUS: done | needs_clarification | blocked',
