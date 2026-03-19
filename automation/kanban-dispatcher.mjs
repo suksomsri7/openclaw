@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 const BASE_URL = process.env.KANBAN_BASE_URL || 'https://kanban.suksomsri.cloud/api/v1';
 const API_KEY = process.env.KANBAN_API_KEY || '';
 const BOARD_ID = process.env.KANBAN_BOARD_ID || 'cmmwc0f5a000z04l22xn31qka'; // Content Master
+const CONFIG_PATH = process.env.DISPATCHER_CONFIG_PATH || path.resolve('automation/dispatcher-config.json');
 const STATE_PATH = process.env.DISPATCHER_STATE_PATH || path.resolve('automation/state/dispatcher-state.json');
 const DRY_RUN = process.argv.includes('--dry-run');
 const VERBOSE = process.argv.includes('--verbose');
@@ -17,9 +18,23 @@ if (!API_KEY) {
 
 fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
 
+function loadJson(filePath, fallback) {
+  if (!fs.existsSync(filePath)) return fallback;
+  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}
+
 function loadState() {
-  if (!fs.existsSync(STATE_PATH)) return { dispatches: {} };
-  return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
+  return loadJson(STATE_PATH, { dispatches: {} });
+}
+
+function loadConfig() {
+  return loadJson(CONFIG_PATH, {
+    allowedBoardIds: [BOARD_ID],
+    titlePrefixes: ['AUTO:', '[AUTO]'],
+    descriptionFlags: ['AUTO-RUN: true', '[AUTO-RUN:ON]'],
+    commentFlags: ['[AUTO-RUN:ON]'],
+    requireWhitelist: true
+  });
 }
 
 function saveState(state) {
@@ -95,10 +110,26 @@ function latestHandoff(card) {
   return comments.find(c => /ส่งต่อ|มอบหมาย|Handoff/i.test(c)) || '';
 }
 
-function isDispatchable(card, stage) {
+function isWhitelisted(card, config) {
+  const title = card.title || '';
+  const desc = card.description || '';
+  const comments = (card.comments || []).map(c => c.content || '');
+
+  if ((config.allowedBoardIds || []).length > 0 && !config.allowedBoardIds.includes(card.column?.boardId || BOARD_ID)) {
+    return false;
+  }
+  if (!config.requireWhitelist) return true;
+  if ((config.titlePrefixes || []).some(p => title.startsWith(p))) return true;
+  if ((config.descriptionFlags || []).some(flag => desc.includes(flag))) return true;
+  if ((config.commentFlags || []).some(flag => comments.some(c => c.includes(flag)))) return true;
+  return false;
+}
+
+function isDispatchable(card, stage, config) {
   const desc = (card.description || '').trim();
   const handoff = latestHandoff(card);
   if (!desc) return false;
+  if (!isWhitelisted(card, config)) return false;
   if (['Strategy', 'Research', 'Synthesis', 'Drafting'].includes(stage) && !handoff && !(card.comments || []).some(c => /\[Stage:/i.test(c.content || ''))) {
     return false;
   }
@@ -202,6 +233,7 @@ async function moveCard(cardId, columnId) {
 
 (async function main() {
   const state = loadState();
+  const config = loadConfig();
   const board = await api(`/boards/${BOARD_ID}`);
   let dispatched = 0;
 
@@ -210,7 +242,7 @@ async function moveCard(cardId, columnId) {
       const detail = await api(`/cards/${card.id}`);
       const stage = detectStage(detail);
       if (!stage || stage === 'Done' || stage === 'Blocked') continue;
-      if (!isDispatchable(detail, stage)) continue;
+      if (!isDispatchable(detail, stage, config)) continue;
       const targets = mapStageToAgent(stage, detail);
       if (targets.length === 0) continue;
 

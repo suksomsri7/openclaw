@@ -1,0 +1,17 @@
+{
+  "allowedBoardIds": [
+    "cmmwc0f5a000z04l22xn31qka"
+  ],
+  "titlePrefixes": [
+    "AUTO:",
+    "[AUTO]"
+  ],
+  "descriptionFlags": [
+    "AUTO-RUN: true",
+    "[AUTO-RUN:ON]"
+  ],
+  "commentFlags": [
+    "[AUTO-RUN:ON]"
+  ],
+  "requireWhitelist": true
+}

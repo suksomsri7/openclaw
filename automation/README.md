@@ -17,6 +17,14 @@ export KANBAN_BASE_URL='https://kanban.suksomsri.cloud/api/v1'
 export KANBAN_BOARD_ID='cmmwc0f5a000z04l22xn31qka'
 ```
 
+## Whitelist behavior
+
+Dispatcher will only auto-run cards that match the whitelist in `automation/dispatcher-config.json`.
+Default allowed signals:
+- title starts with `AUTO:` or `[AUTO]`
+- description contains `AUTO-RUN: true` or `[AUTO-RUN:ON]`
+- comments contain `[AUTO-RUN:ON]`
+
 ## Run once
 
 ```bash
