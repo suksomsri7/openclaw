@@ -63,11 +63,23 @@ async function api(p, options = {}) {
   return json.data;
 }
 
+function extractLockedResearchAgents(card) {
+  const comments = sortedComments(card).map(c => c.content || '').reverse();
+  const joined = comments.join('\n');
+  const locked = [];
+  if (/SeaTurtle\s*เป็นหลัก|route ไป SeaTurtle เป็นหลัก|SeaTurtle ต้องนำ/i.test(joined)) locked.push('seaturtle');
+  if (/Whale\s*เป็นหลัก|route ไป Whale เป็นหลัก|Whale ต้องนำ/i.test(joined)) locked.push('whale');
+  if (/Manta\s*เป็นหลัก|route ไป Manta เป็นหลัก|Manta ต้องนำ/i.test(joined)) locked.push('manta');
+  return [...new Set(locked)];
+}
+
 function mapStageToAgent(stage, card) {
   if (stage === 'Strategy' || stage === 'Synthesis' || stage === 'Review') return ['shark'];
   if (stage === 'Drafting') return ['octopus'];
   if (stage === 'Approval') return []; // Boss/Kraken decision gate remains manual for now
   if (stage === 'Research') {
+    const locked = extractLockedResearchAgents(card);
+    if (locked.length > 0) return locked;
     const targets = new Set();
     for (const s of card.subtasks || []) {
       const t = s.title || '';
@@ -372,11 +384,7 @@ function stagePresetSubtasks(stage) {
       'Shark: วิเคราะห์ audience fit และ pain point',
       'Shark: กำหนด angle / hook / message hierarchy'
     ],
-    Research: [
-      'Whale: ส่ง research packet ตามโจทย์',
-      'Manta: ส่ง research packet ตามโจทย์',
-      'SeaTurtle: ส่ง research packet ตามโจทย์'
-    ],
+    Research: [],
     Synthesis: [
       'Shark: สังเคราะห์ research packets เป็น synthesis packet'
     ],
