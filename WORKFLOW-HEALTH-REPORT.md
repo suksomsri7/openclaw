@@ -1,56 +1,56 @@
 # WORKFLOW-HEALTH-REPORT.md
 
-Template สำหรับรายงานสุขภาพของ workflow multi-agent โดย Kraken
+Template สำหรับรายงานสุขภาพ workflow multi-agent โดย Kraken (ภาษาไทย)
 
 ---
 
-## Executive Summary
-- Overall status: Green / Yellow / Red
-- Dispatcher status:
-- Audit status:
-- Main risk:
-- Recommended action:
+## สรุปผู้บริหาร
+- สถานะรวม: เขียว / เหลือง / แดง
+- สถานะ Dispatcher:
+- สถานะ Audit:
+- ความเสี่ยงหลัก:
+- ข้อเสนอแนะถัดไป:
 
 ---
 
-## 1) Workflow Integrity
-- Cards checked:
-- Cards with valid Description/Stage/Subtasks:
-- Cards with missing handoff:
-- Cards with routing mismatch:
+## 1) ความถูกต้องของ Workflow
+- จำนวนการ์ดที่ตรวจ:
+- การ์ดที่มี Description/Stage/Subtasks ครบ:
+- การ์ดที่ขาด handoff:
+- การ์ดที่ route ผิด:
 
-## 2) Agent Identity Health
-- Agent comments with correct identity:
-- Incorrectly attributed comments:
-- Notes:
+## 2) ความถูกต้องของตัวตน Agent
+- คอมเมนต์ที่ออกด้วย identity ถูกต้อง:
+- คอมเมนต์ที่ attribution ผิด:
+- หมายเหตุ:
 
-## 3) Automation Health
-- Dispatcher cron:
-- Audit cron:
-- Loop anomalies:
-- Dispatch errors:
-- Cards stuck too long:
+## 3) สุขภาพของระบบอัตโนมัติ
+- สถานะ Dispatcher cron:
+- สถานะ Audit cron:
+- Loop anomaly:
+- Dispatch error:
+- การ์ดที่ค้างนานผิดปกติ:
 
-## 4) Boss Review Readiness
-- Approval cards checked:
-- Cards with `## Content` block:
-- Cards missing `หัวข้อ`:
-- Cards missing `เนื้อหา`:
+## 4) ความพร้อมสำหรับ Boss Review
+- จำนวนการ์ดที่อยู่ใน Approval:
+- การ์ดที่มี `## Content` ครบ:
+- การ์ดที่ขาด `หัวข้อ`:
+- การ์ดที่ขาด `เนื้อหา`:
 
-## 5) Active Exceptions
+## 5) ปัญหาที่กำลังเปิดอยู่
 - Card ID:
-- Problem:
+- ปัญหา:
 - Owner:
-- Suggested fix:
+- วิธีแก้ที่แนะนำ:
 
-## 6) Improvement Notes
-- Pattern found:
+## 6) บันทึกการปรับปรุง
+- Pattern ที่พบ:
 - Root cause:
-- Fix applied / proposed:
+- วิธีแก้ที่ใช้ / ที่เสนอ:
 
 ---
 
-## Shortcut Summary
-- ✅ What is working
-- ⚠️ What needs watching
-- 🔴 What needs intervention now
+## สรุปย่อ
+- ✅ สิ่งที่ทำงานได้ดี
+- ⚠️ สิ่งที่ต้องจับตา
+- 🔴 สิ่งที่ต้องเข้าไปแก้ทันที
