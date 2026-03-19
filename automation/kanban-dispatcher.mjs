@@ -354,6 +354,48 @@ async function updateCard(cardId, patch, apiKey = API_KEY) {
   });
 }
 
+function extractUsage(result) {
+  const meta = result?.result?.meta?.agentMeta || {};
+  const usage = meta.lastCallUsage || meta.usage || {};
+  return {
+    input: Number(usage.input || 0),
+    output: Number(usage.output || 0)
+  };
+}
+
+function renderTokenBlock(cardId, state) {
+  const usage = (state.tokenUsage || {})[cardId] || {};
+  const agents = [
+    ['kraken', 'Kraken'],
+    ['shark', 'Shark'],
+    ['octopus', 'Octopus'],
+    ['seaturtle', 'SeaTurtle'],
+    ['whale', 'Whale'],
+    ['manta', 'Manta']
+  ];
+  let totalIn = 0;
+  let totalOut = 0;
+  const lines = ['## Token', ''];
+  for (const [key, label] of agents) {
+    const u = usage[key] || { input: 0, output: 0 };
+    totalIn += u.input || 0;
+    totalOut += u.output || 0;
+    lines.push(`(${label})`);
+    lines.push(`Input : ${u.input || 0}`);
+    lines.push(`Output : ${u.output || 0}`);
+    lines.push('');
+  }
+  lines.push('Totle');
+  lines.push(`Input : ${totalIn}`);
+  lines.push(`Output : ${totalOut}`);
+  return lines.join('\n').trim();
+}
+
+function withTokenBlock(description, cardId, state) {
+  const desc = (description || '').replace(/\n## Token[\s\S]*$/m, '').trim();
+  return `${desc}\n\n${renderTokenBlock(cardId, state)}`.trim();
+}
+
 function extractDraftBody(text = '') {
   const patterns = [
     /3\) Final Facebook draft\n([\s\S]*?)(?:\n\d+\)|$)/i,
@@ -367,15 +409,19 @@ function extractDraftBody(text = '') {
   return '';
 }
 
-function buildBossReviewDescription(card) {
+function buildBossReviewDescription(card, state) {
   const octopus = latestAutorunComment(card, 'octopus');
   const shark = latestAutorunComment(card, 'shark');
   const source = (octopus?.content || shark?.content || '');
   const body = extractDraftBody(source);
   const title = (card.title || '').replace(/^AUTO:\s*/i, '').trim();
-  const base = (card.description || '').replace(/\n## Content[\s\S]*$/m, '').trim();
-  const block = `\n\n## Content\nหัวข้อ\n${title}\n\nเนื้อหา\n${body || '[รอ draft/review packet]'}`;
-  return `${base}${block}`;
+  let base = (card.description || '')
+    .replace(/\n## Content[\s\S]*?(?=\n## Token|$)/m, '')
+    .replace(/\n## Token[\s\S]*$/m, '')
+    .trim();
+  const contentBlock = `## Content\nหัวข้อ\n${title}\n\nเนื้อหา\n${body || '[รอ draft/review packet]'}`;
+  base = `${base}\n\n${contentBlock}`.trim();
+  return withTokenBlock(base, card.id, state);
 }
 
 function stagePresetSubtasks(stage) {
@@ -494,7 +540,13 @@ async function maybeAdvanceResearchToSynthesis(card, board) {
         const result = dispatchAgent(agentId, prompt);
         const text = extractText(result);
         const parsed = parseAgentResponse(text);
+        const usage = extractUsage(result);
         state.dispatches[key] = fingerprint;
+        state.tokenUsage = state.tokenUsage || {};
+        state.tokenUsage[detail.id] = state.tokenUsage[detail.id] || {};
+        state.tokenUsage[detail.id][agentId] = state.tokenUsage[detail.id][agentId] || { input: 0, output: 0 };
+        state.tokenUsage[detail.id][agentId].input += usage.input;
+        state.tokenUsage[detail.id][agentId].output += usage.output;
         recordRunHistory(state, detail.id, agentId, stage);
         dispatched += 1;
 
@@ -514,14 +566,16 @@ async function maybeAdvanceResearchToSynthesis(card, board) {
           const krakenApiKey = agentApiKeys.kraken || API_KEY;
           await postComment(detail.id, autoComment, actorApiKey);
           const refreshedForCompletion = await api(`/cards/${detail.id}`);
-          await markAgentSubtasksComplete(refreshedForCompletion, agentId);
+          await updateCard(detail.id, { description: withTokenBlock(refreshedForCompletion.description || '', detail.id, state) }, krakenApiKey);
+          const refreshedAfterToken = await api(`/cards/${detail.id}`);
+          await markAgentSubtasksComplete(refreshedAfterToken, agentId);
 
           if (normalizedNextStage && normalizedNextStage !== stage) {
             await postComment(detail.id, `[Stage: ${normalizedNextStage}]\n\n[AUTOMATION] Transitioned from ${stage} to ${normalizedNextStage}`, krakenApiKey);
             const refreshedForStage = await api(`/cards/${detail.id}`);
             await ensureStageSubtasks(refreshedForStage, normalizedNextStage);
             if (normalizedNextStage === 'Approval') {
-              const bossReviewDescription = buildBossReviewDescription(refreshedForStage);
+              const bossReviewDescription = buildBossReviewDescription(refreshedForStage, state);
               await updateCard(detail.id, { description: bossReviewDescription }, krakenApiKey);
             }
           }
