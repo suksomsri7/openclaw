@@ -266,6 +266,17 @@
 แนบ version ที่แนะนำ พร้อมเหตุผลและจุดที่ต้องการอนุมัติ
 ```
 
+#### Boss Review Description rule
+เมื่อ card เข้าสู่ `Approval` / Boss Review ให้เติม block นี้ใน `Description` เสมอ:
+```md
+## Content
+หัวข้อ
+[หัวข้อคอนเทนต์]
+
+เนื้อหา
+[เนื้อหาที่พร้อมให้ Boss ตรวจ]
+```
+
 ---
 
 ### 8) Done

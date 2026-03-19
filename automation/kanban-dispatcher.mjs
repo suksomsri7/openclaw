@@ -137,6 +137,11 @@ function latestStageComment(card, stageName) {
   return comments.length ? comments[comments.length - 1] : null;
 }
 
+function latestAutorunComment(card, agentId) {
+  const comments = sortedComments(card).filter(c => (c.content || '').startsWith(`[AUTORUN:${agentId}]`));
+  return comments.length ? comments[comments.length - 1] : null;
+}
+
 function isWhitelisted(card, config) {
   const title = card.title || '';
   const desc = card.description || '';
@@ -329,6 +334,38 @@ async function createSubtask(cardId, title, apiKey = API_KEY) {
   });
 }
 
+async function updateCard(cardId, patch, apiKey = API_KEY) {
+  return api(`/cards/${cardId}`, {
+    method: 'PATCH',
+    apiKey,
+    body: JSON.stringify(patch)
+  });
+}
+
+function extractDraftBody(text = '') {
+  const patterns = [
+    /3\) Final Facebook draft\n([\s\S]*?)(?:\n\d+\)|$)/i,
+    /## Draft\n([\s\S]*?)(?:\n## |$)/i,
+    /DELIVERABLE:\n([\s\S]*?)(?:\nNEXT_STAGE:|$)/i
+  ];
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m) return m[1].trim();
+  }
+  return '';
+}
+
+function buildBossReviewDescription(card) {
+  const octopus = latestAutorunComment(card, 'octopus');
+  const shark = latestAutorunComment(card, 'shark');
+  const source = (octopus?.content || shark?.content || '');
+  const body = extractDraftBody(source);
+  const title = (card.title || '').replace(/^AUTO:\s*/i, '').trim();
+  const base = (card.description || '').replace(/\n## Content[\s\S]*$/m, '').trim();
+  const block = `\n\n## Content\nหัวข้อ\n${title}\n\nเนื้อหา\n${body || '[รอ draft/review packet]'}`;
+  return `${base}${block}`;
+}
+
 function stagePresetSubtasks(stage) {
   const map = {
     Strategy: [
@@ -475,6 +512,10 @@ async function maybeAdvanceResearchToSynthesis(card, board) {
             await postComment(detail.id, `[Stage: ${normalizedNextStage}]\n\n[AUTOMATION] Transitioned from ${stage} to ${normalizedNextStage}`, krakenApiKey);
             const refreshedForStage = await api(`/cards/${detail.id}`);
             await ensureStageSubtasks(refreshedForStage, normalizedNextStage);
+            if (normalizedNextStage === 'Approval') {
+              const bossReviewDescription = buildBossReviewDescription(refreshedForStage);
+              await updateCard(detail.id, { description: bossReviewDescription }, krakenApiKey);
+            }
           }
 
           const targetColumnTitle = stageToColumnTitle(normalizedNextStage);
