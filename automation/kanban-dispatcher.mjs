@@ -172,7 +172,7 @@ function buildPrompt(card, stage, targetAgent) {
     'SUMMARY: ...',
     'DELIVERABLE:',
     '...',
-    'NEXT_STAGE: ...',
+    'NEXT_STAGE: choose exactly one of Intake | Strategy | Research | Synthesis | Drafting | Review | Approval | Done | Blocked',
     'COMMENT:',
     '...',
     'RETURN_TO: Shark | Kraken | Dispatcher'
@@ -207,6 +207,22 @@ function parseAgentResponse(text) {
     comment: getBlock('COMMENT', ['RETURN_TO', 'BLOCKERS', 'NOTES']),
     returnTo: getBlock('RETURN_TO', ['BLOCKERS', 'NOTES'])
   };
+}
+
+function normalizeStageValue(text = '') {
+  const t = String(text || '').trim();
+  if (!t) return '';
+  const exact = ['Intake', 'Strategy', 'Research', 'Synthesis', 'Drafting', 'Review', 'Approval', 'Done', 'Blocked'];
+  for (const s of exact) {
+    const re = new RegExp(`\\b${s}\\b`, 'i');
+    if (re.test(t)) return s;
+  }
+  if (/draft/i.test(t)) return 'Drafting';
+  if (/review/i.test(t)) return 'Review';
+  if (/approve|approval|boss/i.test(t)) return 'Approval';
+  if (/research/i.test(t)) return 'Research';
+  if (/synthesis/i.test(t)) return 'Synthesis';
+  return '';
 }
 
 function stageToColumnTitle(stage) {
@@ -261,18 +277,24 @@ async function moveCard(cardId, columnId) {
         dispatched += 1;
 
         if (!DRY_RUN && text) {
+          const normalizedNextStage = normalizeStageValue(parsed.nextStage);
           const autoComment = [
             `[AUTORUN:${agentId}]`,
             `STATUS: ${parsed.status || 'done'}`,
             parsed.summary ? `SUMMARY: ${parsed.summary}` : '',
             parsed.deliverable ? `DELIVERABLE:\n${parsed.deliverable}` : '',
-            parsed.nextStage ? `NEXT_STAGE: ${parsed.nextStage}` : '',
+            parsed.nextStage ? `NEXT_STAGE_RAW: ${parsed.nextStage}` : '',
+            normalizedNextStage ? `NEXT_STAGE: ${normalizedNextStage}` : '',
             parsed.comment ? `COMMENT:\n${parsed.comment}` : '',
             parsed.returnTo ? `RETURN_TO: ${parsed.returnTo}` : ''
           ].filter(Boolean).join('\n\n');
           await postComment(detail.id, autoComment);
 
-          const targetColumnTitle = stageToColumnTitle(parsed.nextStage);
+          if (normalizedNextStage && normalizedNextStage !== stage) {
+            await postComment(detail.id, `[Stage: ${normalizedNextStage}]\n\n[AUTOMATION] Transitioned from ${stage} to ${normalizedNextStage}`);
+          }
+
+          const targetColumnTitle = stageToColumnTitle(normalizedNextStage);
           if (targetColumnTitle) {
             const targetColumn = (board.columns || []).find(c => c.title === targetColumnTitle);
             if (targetColumn && targetColumn.id !== detail.columnId) {
