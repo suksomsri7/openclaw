@@ -375,19 +375,19 @@ function renderTokenBlock(cardId, state) {
   ];
   let totalIn = 0;
   let totalOut = 0;
-  const lines = ['## Token', ''];
+  const lines = [
+    '## Token',
+    '',
+    '| Agent | Input | Output |',
+    '|---|---:|---:|'
+  ];
   for (const [key, label] of agents) {
     const u = usage[key] || { input: 0, output: 0 };
     totalIn += u.input || 0;
     totalOut += u.output || 0;
-    lines.push(`(${label})`);
-    lines.push(`Input : ${u.input || 0}`);
-    lines.push(`Output : ${u.output || 0}`);
-    lines.push('');
+    lines.push(`| ${label} | ${u.input || 0} | ${u.output || 0} |`);
   }
-  lines.push('Totle');
-  lines.push(`Input : ${totalIn}`);
-  lines.push(`Output : ${totalOut}`);
+  lines.push(`| Totle | ${totalIn} | ${totalOut} |`);
   return lines.join('\n').trim();
 }
 
