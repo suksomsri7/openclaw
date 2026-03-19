@@ -289,6 +289,75 @@ async function moveCard(cardId, columnId) {
   });
 }
 
+async function updateSubtask(cardId, subtaskId, patch) {
+  return api(`/cards/${cardId}/subtasks/${subtaskId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch)
+  });
+}
+
+async function createSubtask(cardId, title) {
+  return api(`/cards/${cardId}/subtasks`, {
+    method: 'POST',
+    body: JSON.stringify({ title })
+  });
+}
+
+function stagePresetSubtasks(stage) {
+  const map = {
+    Strategy: [
+      'Shark: วิเคราะห์ audience fit และ pain point',
+      'Shark: กำหนด angle / hook / message hierarchy'
+    ],
+    Research: [
+      'Whale: ส่ง research packet ตามโจทย์',
+      'Manta: ส่ง research packet ตามโจทย์',
+      'SeaTurtle: ส่ง research packet ตามโจทย์'
+    ],
+    Synthesis: [
+      'Shark: สังเคราะห์ research packets เป็น synthesis packet'
+    ],
+    Drafting: [
+      'Octopus: ทำ draft ตาม synthesis packet'
+    ],
+    Review: [
+      'Shark: review draft และสรุป minor edits / approval'
+    ],
+    Approval: [
+      'Kraken: สรุป final recommendation เพื่อ Boss review'
+    ]
+  };
+  return map[stage] || [];
+}
+
+async function markAgentSubtasksComplete(card, agentId) {
+  const prefixes = {
+    shark: 'Shark:',
+    octopus: 'Octopus:',
+    whale: 'Whale:',
+    manta: 'Manta:',
+    seaturtle: 'SeaTurtle:',
+    main: 'Kraken:'
+  };
+  const prefix = prefixes[agentId];
+  if (!prefix) return;
+  for (const s of (card.subtasks || [])) {
+    if (!s.isCompleted && (s.title || '').startsWith(prefix)) {
+      await updateSubtask(card.id, s.id, { isCompleted: true });
+    }
+  }
+}
+
+async function ensureStageSubtasks(card, stage) {
+  const wanted = stagePresetSubtasks(stage);
+  const existingTitles = new Set((card.subtasks || []).map(s => s.title || ''));
+  for (const title of wanted) {
+    if (!existingTitles.has(title)) {
+      await createSubtask(card.id, title);
+    }
+  }
+}
+
 async function maybeAdvanceResearchToSynthesis(card, board) {
   const required = mapStageToAgent('Research', card);
   if (required.length === 0) return false;
@@ -358,9 +427,13 @@ async function maybeAdvanceResearchToSynthesis(card, board) {
             parsed.returnTo ? `RETURN_TO: ${parsed.returnTo}` : ''
           ].filter(Boolean).join('\n\n');
           await postComment(detail.id, autoComment);
+          const refreshedForCompletion = await api(`/cards/${detail.id}`);
+          await markAgentSubtasksComplete(refreshedForCompletion, agentId);
 
           if (normalizedNextStage && normalizedNextStage !== stage) {
             await postComment(detail.id, `[Stage: ${normalizedNextStage}]\n\n[AUTOMATION] Transitioned from ${stage} to ${normalizedNextStage}`);
+            const refreshedForStage = await api(`/cards/${detail.id}`);
+            await ensureStageSubtasks(refreshedForStage, normalizedNextStage);
           }
 
           const targetColumnTitle = stageToColumnTitle(normalizedNextStage);
