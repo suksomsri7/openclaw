@@ -1,0 +1,7 @@
+# OpenClaw runtime artifacts
+agents/*/.openclaw/
+agents/*/HEARTBEAT.md
+
+# Automation runtime artifacts
+automation/logs/
+automation/state/
