@@ -8,6 +8,7 @@ const API_KEY = process.env.KANBAN_API_KEY || '';
 const BOARD_ID = process.env.KANBAN_BOARD_ID || 'cmmwc0f5a000z04l22xn31qka'; // Content Master
 const CONFIG_PATH = process.env.DISPATCHER_CONFIG_PATH || path.resolve('automation/dispatcher-config.json');
 const STATE_PATH = process.env.DISPATCHER_STATE_PATH || path.resolve('automation/state/dispatcher-state.json');
+const RUN_LOG_PATH = process.env.DISPATCHER_RUN_LOG_PATH || path.resolve('automation/logs/dispatcher-runs.jsonl');
 const DRY_RUN = process.argv.includes('--dry-run');
 const VERBOSE = process.argv.includes('--verbose');
 
@@ -17,6 +18,7 @@ if (!API_KEY) {
 }
 
 fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
+fs.mkdirSync(path.dirname(RUN_LOG_PATH), { recursive: true });
 
 function loadJson(filePath, fallback) {
   if (!fs.existsSync(filePath)) return fallback;
@@ -39,6 +41,10 @@ function loadConfig() {
 
 function saveState(state) {
   fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
+}
+
+function appendRunLog(record) {
+  fs.appendFileSync(RUN_LOG_PATH, JSON.stringify(record) + '\n');
 }
 
 async function api(p, options = {}) {
@@ -80,6 +86,20 @@ function simpleHash(input) {
     hash |= 0;
   }
   return String(hash);
+}
+
+function isLooping(state, cardId, agentId, stage) {
+  const now = Date.now();
+  const hourAgo = now - (60 * 60 * 1000);
+  const history = (state.runHistory || []).filter(r => r.ts >= hourAgo);
+  state.runHistory = history;
+  const count = history.filter(r => r.cardId === cardId && r.agentId === agentId && r.stage === stage).length;
+  return count >= 3;
+}
+
+function recordRunHistory(state, cardId, agentId, stage) {
+  state.runHistory = state.runHistory || [];
+  state.runHistory.push({ ts: Date.now(), cardId, agentId, stage });
 }
 
 function sortedComments(card) {
@@ -406,12 +426,24 @@ async function maybeAdvanceResearchToSynthesis(card, board) {
       for (const agentId of targets) {
         const key = `${detail.id}:${agentId}`;
         if (state.dispatches[key] === fingerprint) continue;
+        if (isLooping(state, detail.id, agentId, stage)) {
+          appendRunLog({
+            ts: new Date().toISOString(),
+            type: 'loop-skip',
+            cardId: detail.id,
+            title: detail.title,
+            stage,
+            agentId
+          });
+          continue;
+        }
 
         const prompt = buildPrompt(detail, stage, agentId);
         const result = dispatchAgent(agentId, prompt);
         const text = extractText(result);
         const parsed = parseAgentResponse(text);
         state.dispatches[key] = fingerprint;
+        recordRunHistory(state, detail.id, agentId, stage);
         dispatched += 1;
 
         if (!DRY_RUN && text) {
@@ -444,6 +476,18 @@ async function maybeAdvanceResearchToSynthesis(card, board) {
             }
           }
         }
+
+        appendRunLog({
+          ts: new Date().toISOString(),
+          type: 'dispatch',
+          cardId: detail.id,
+          title: detail.title,
+          stage,
+          agentId,
+          status: parsed.status || 'done',
+          nextStage: normalizeStageValue(parsed.nextStage) || parsed.nextStage || '',
+          returnTo: parsed.returnTo || ''
+        });
 
         if (VERBOSE) {
           console.log(JSON.stringify({ cardId: detail.id, stage, agentId, parsed, result }, null, 2));

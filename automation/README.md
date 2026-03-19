@@ -37,9 +37,16 @@ node automation/kanban-dispatcher.mjs --verbose
 node automation/kanban-dispatcher.mjs --dry-run --verbose
 ```
 
+## Dashboard
+
+```bash
+node automation/dispatcher-dashboard.mjs
+```
+
 ## Notes
 
 - Current version dispatches work to configured agents, parses their structured replies, and posts autorun comments back into Kanban.
 - Column movement is supported based on `NEXT_STAGE` mapping.
-- Subtask refresh/closure is **not yet** automatic.
+- Subtask creation/closure automation is partially implemented and should continue to be validated on live cards.
 - State file: `automation/state/dispatcher-state.json`
+- Run log file: `automation/logs/dispatcher-runs.jsonl`
