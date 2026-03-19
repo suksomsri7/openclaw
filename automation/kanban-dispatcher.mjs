@@ -110,6 +110,11 @@ function latestHandoff(card) {
   return comments.find(c => /ส่งต่อ|มอบหมาย|Handoff/i.test(c)) || '';
 }
 
+function latestStageComment(card, stageName) {
+  const comments = sortedComments(card).filter(c => (c.content || '').includes(`[Stage: ${stageName}]`));
+  return comments.length ? comments[comments.length - 1] : null;
+}
+
 function isWhitelisted(card, config) {
   const title = card.title || '';
   const desc = card.description || '';
@@ -247,6 +252,33 @@ async function moveCard(cardId, columnId) {
   });
 }
 
+async function maybeAdvanceResearchToSynthesis(card, board) {
+  const required = mapStageToAgent('Research', card);
+  if (required.length === 0) return false;
+  const researchStage = latestStageComment(card, 'Research');
+  const stageTime = new Date(researchStage?.createdAt || 0).getTime();
+  const comments = sortedComments(card);
+
+  const completed = new Set();
+  for (const c of comments) {
+    const t = new Date(c.createdAt || 0).getTime();
+    if (t < stageTime) continue;
+    const m = (c.content || '').match(/^\[AUTORUN:([^\]]+)\]/i);
+    if (m) completed.add(m[1].toLowerCase());
+  }
+
+  if (!required.every(agent => completed.has(agent))) return false;
+  const existingSynthesis = latestStageComment(card, 'Synthesis');
+  if (existingSynthesis && new Date(existingSynthesis.createdAt || 0).getTime() >= stageTime) return false;
+
+  await postComment(card.id, '[Stage: Synthesis]\n\n[AUTOMATION] All required research packets received. Routing back to Shark for synthesis.');
+  const targetColumn = (board.columns || []).find(c => c.title === 'Creating');
+  if (targetColumn && targetColumn.id !== card.columnId) {
+    await moveCard(card.id, targetColumn.id);
+  }
+  return true;
+}
+
 (async function main() {
   const state = loadState();
   const config = loadConfig();
@@ -307,6 +339,14 @@ async function moveCard(cardId, columnId) {
           console.log(JSON.stringify({ cardId: detail.id, stage, agentId, parsed, result }, null, 2));
         } else {
           console.log(`[dispatch] ${detail.title} -> ${agentId} (${stage})`);
+        }
+      }
+
+      if (!DRY_RUN && stage === 'Research') {
+        const refreshed = await api(`/cards/${detail.id}`);
+        const advanced = await maybeAdvanceResearchToSynthesis(refreshed, board);
+        if (advanced) {
+          console.log(`[automation] ${detail.title} advanced from Research to Synthesis`);
         }
       }
     }
